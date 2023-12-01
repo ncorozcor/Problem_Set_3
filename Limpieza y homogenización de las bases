@@ -1,0 +1,215 @@
+##Cargar librerias##
+
+rm(list = ls())
+
+install.packages("pacman")
+require (pacman) 
+
+##cargamos las bases##
+train_personas <- read.csv("/Users/ncoro/Desktop/2023/BML/TALLER 3/train_personas.csv")
+train_hogares <- read.csv("/Users/ncoro/Desktop/2023/BML/TALLER 3/train_hogares.csv")
+test_personas <- read.csv("/Users/ncoro/Desktop/2023/BML/TALLER 3/test_personas.csv")
+test_hogares <- read.csv("/Users/ncoro/Desktop/2023/BML/TALLER 3/test_hogares.csv")
+
+sample_submission <- read.csv("/Users/ncoro/Desktop/2023/BML/TALLER 3/sample_submission.csv")
+
+p_load(tidyverse)
+
+#Revisar las variables de cada base
+
+names(train_personas)
+glimpse(train_personas)
+
+names(test_personas)
+glimpse(test_personas)
+
+names(train_hogares)
+glimpse(train_hogares)
+
+names(test_hogares)
+glimpse(test_hogares)
+
+var_com_train <- intersect(names(train_personas), names(train_hogares))
+var_com_train
+
+#Revisemos si podemos cruzar por ID de cada base
+
+t_id <- unique(test_hogares$id)
+id_in_train <- t_id %in% train_hogares$id
+t_id[id_in_train]
+
+id_in_trainp <- t_id %in% train_personas$id
+t_id[id_in_trainp] 
+
+id_sub <- t_id %in% sample_submission$id
+t_id[id_sub]
+#colige#
+
+## Por tanto vemos que lo podemos unir la base de hogares con individuos del sample submission
+test_hogares <- left_join(test_hogares, sample_submission)
+colnames(test_hogares)
+
+## Creemos variables similares para ambas bases##
+table(train_hogares$Pobre)
+train_hogares <- train_hogares %>% mutate(Hpobre = ifelse(Ingpcug < Lp, 1, 0))
+table(train_hogares$Hpobre, train_hogares$Pobre)
+
+train_hogares <- train_hogares %>% mutate(Hpobre2 = ifelse(Ingtotugarr < Lp*Npersug, 1, 0))
+table(train_hogares$Pobre, train_hogares$Hpobre2)
+
+## Creamos variable ingreso en Base train y test de personas##
+
+ING <- train_personas %>% group_by(id) %>% summarize(ING_h = sum(Ingtot, na.rm = TRUE))
+summary(ING)
+
+BDper <- setdiff(names(train_personas), names(test_personas))
+BDper <- BDper[BDper != "Ingtot"]
+length(BDper)
+npertrain <- train_personas %>% select(-all_of(BDper))
+
+##Creamos base hogares para variable pobre e ingreso#
+
+BDhg <- setdiff(names(train_hogares), names(test_hogares))
+length(BDhg)
+BDhg <- BDhg[BDhg != "Pobre"]
+Phg <- train_hogares %>% select(-all_of(BDhg))  
+
+BDhg <- setdiff(names(train_hogares), names(test_hogares))
+BDhg_i <- BDhg[BDhg != "TINGhg"]
+INGhg <- train_hogares %>% select(-all_of(BDhg_i)) 
+
+## Para mayor entendimiento de los datos renombramos las variables ##
+
+#Hogar#
+
+names(test_hogares)[names(test_hogares) == "P5090"] <- "vivienda_ocupada"
+test_hogares$vivienda_ocupada <- factor(test_hogares$vivienda_ocupada)
+
+names(test_hogares)[names(test_hogares) == "P5100"] <- "Cuota_am"
+names(test_hogares)[names(test_hogares) == "P5140"] <- "Arriendo"
+
+saveRDS(test_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/test_hogares.rds")
+
+names(BDhg)[names(BDhg) == "P5090"] <- "vivienda_ocupada"
+BDhg$vivienda_ocupada <- factor(BDhg$vivienda_ocupada)
+
+names(BDhg)[names(BDhg) == "P5100"] <- "Cuota_am"
+names(BDhg)[names(BDhg) == "P5140"] <- "Arriendo"
+
+saveRDS(train_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/BDhg.rds")
+
+#personas#
+names(test_personas)[names(test_personas) == "P6040"] <- "Edad"
+names(test_personas)[names(test_personas) == "P6426"] <- "Antiguedad_TB"
+names(test_personas)[names(test_personas) == "P6050"] <- "Jefe_de_hogar"
+test_personas$mujer <- test_personas$mujer  - 1  
+names(test_personas)[names(test_personas) == "P6020"] <- "mujer"
+test_personas$mujer <- test_personas$mujer  - 1  
+
+names(test_personas)[names(test_personas) == "P6210"] <- "edu"
+test_personas$edu <- factor(test_personas$edu)
+
+saveRDS(test_personas, "/Users/ncoro/Desktop/2023/BML/TALLER 3/test_personas.rds")
+
+names(npertrain)[names(npertrain) ==  "P6040"] <- "Edad"
+names(npertrain)[names(npertrain) == "P6426"] <- "Antiguedad_TB"
+
+names(npertrain)[names(npertrain) == "P6020"] <- "mujer"
+npertrain$mujer <- npertrain$mujer  - 1
+
+names(npertrain)[names(npertrain) == "P6210"] <- "edu"
+npertrain$edu <- factor(npertrain$edu)
+
+saveRDS(npertrain, "/Users/ncoro/Desktop/2023/BML/TALLER 3/npertrain.rds")
+
+#Pasamos variables de base personas a hogares ##
+
+#saquemos promedio de horas trabajadas#
+
+horas_trab <- test_personas %>% group_by(id) %>% summarize(horas_trabP = mean(P6800, na.rm = TRUE))
+summary(horas_trab)
+
+test_hogares <- left_join(test_hogares, horas_trab)
+colnames(test_hogares)
+
+na_count <- colSums(is.na(test_hogares))
+na_count <- sort(na_count, decreasing = TRUE)
+
+test_hogares$horas_trabP <- ifelse(is.na(test_hogares$horas_trabP), 
+                                        ifelse(test_hogares$pobre == 0, 
+                                               mean(test_hogares$horas_trabP, na.rm = TRUE), 
+                                               0), 
+                                        test_hogares$horas_trabP)
+
+
+names(BDhg)[names(BDhg) == "Pobre"] <- "pobre"
+
+horastrab_train <- train_personas %>% group_by(id) %>% summarize(horastrab_prom = mean(P6800, na.rm = TRUE))
+summary(horastrab_train)
+
+Phg <- left_join(Phg, horastrab_train)
+colnames(Phg)
+
+na_count <- colSums(is.na(Phg))
+na_count <- sort(na_count, decreasing = TRUE)
+
+Phg$horastrab_prom <- ifelse(is.na(Phg$horastrab_prom), 
+                                           ifelse(Phg$pobre == 0, 
+                                                  mean(Phg$horastrab_prom, na.rm = TRUE), 
+                                                  0), 
+                                           Phg$horastrab_prom)
+
+## Eliminar NA
+
+test_hogares <- subset(test_hogares, select = -Cuota_amortización)
+BDhg <- subset(BDhg, select = -Cuota_amortización)
+
+na_count <- colSums(is.na(test_hogares))
+na_count <- sort(na_count, decreasing = TRUE)
+
+test_hogares <- subset(test_hogares, select = -Arriendo)
+Phg <- subset(Phg, select = -Arriendo)
+
+test_hogares <- subset(test_hogares, select = -P5130)
+Phg <- subset(Phg, select = -P5130)
+
+test_hogares <- subset(test_hogares, select = -c(Clase, Fex_c, Fex_dpto))
+Phg<- subset(Phg, select = -c(Clase, Fex_c, Fex_dpto))
+
+
+train_personas$P6210 <- ifelse(is.na(train_personas$P6210), 
+                               0, train_personas$P6210)
+
+train_personas$P6210 <- ifelse(train_personas$P6210 == 9, 
+                               0, train_personas$P6210)                               
+
+educ <- train_personas %>% group_by(id) %>% summarize(max_educ = max(P6210, na.rm = TRUE))
+summary(educ)
+
+Phg <- left_join(Phg, educ)
+colnames(Phg)
+table(Phg$max_educ)
+
+Phg$max_educ <- factor(Phg$max_educ)
+
+# Test   
+test_personas$edu <- ifelse(is.na(test_personas$edu), 
+                                   0, test_personas$edu)
+
+test_personas$edu <- ifelse(test_personas$edu == 7, 
+                                   0, test_personas$edu) 
+
+edu_test <- test_personas %>% group_by(id) %>% summarize(max_educ = max(edu, na.rm = TRUE))
+summary(edu_test)
+
+test_hogares <- left_join(test_hogares, edu_test)
+colnames(test_hogares)
+table(test_hogares$max_educ)
+
+test_hogares$max_educ <- factor(test_hogares$max_educ)
+
+Phg <- left_join(Phg, ING)
+colnames(Phg)
+
+saveRDS(Phg, "/Users/ncoro/Desktop/2023/BML/TALLER 3/train_hogV.rds")
+saveRDS(test_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/test_hogaresV.rds")
