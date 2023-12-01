@@ -14,6 +14,7 @@ test_hogares <- read.csv("/Users/ncoro/Desktop/2023/BML/TALLER 3/test_hogares.cs
 sample_submission <- read.csv("/Users/ncoro/Desktop/2023/BML/TALLER 3/sample_submission.csv")
 
 p_load(tidyverse)
+library(dplyr)
 
 #Revisar las variables de cada base
 
@@ -69,14 +70,14 @@ npertrain <- train_personas %>% select(-all_of(BDper))
 
 ##Creamos base hogares para variable pobre e ingreso#
 
-BDhg <- setdiff(names(train_hogares), names(test_hogares))
-length(BDhg)
-BDhg <- BDhg[BDhg != "Pobre"]
-Phg <- train_hogares %>% select(-all_of(BDhg))  
+BDhogar <- setdiff(names(train_hogares), names(test_hogares))
+length(BDhogar)
+BDhogar <- BDhogar[BDhogar != "Pobre"]
+Phg <- train_hogares %>% select(-all_of(BDhogar))  
 
-BDhg <- setdiff(names(train_hogares), names(test_hogares))
-BDhg_i <- BDhg[BDhg != "TINGhg"]
-INGhg <- train_hogares %>% select(-all_of(BDhg_i)) 
+BDhogar <- setdiff(names(train_hogares), names(test_hogares))
+BDhogar_i <- BDhogar[BDhogar != "TINGhg"]
+I_trainhg <- train_hogares %>% select(-all_of(BDhogar_i)) 
 
 ## Para mayor entendimiento de los datos renombramos las variables ##
 
@@ -90,19 +91,21 @@ names(test_hogares)[names(test_hogares) == "P5140"] <- "Arriendo"
 
 saveRDS(test_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/test_hogares.rds")
 
-names(BDhg)[names(BDhg) == "P5090"] <- "vivienda_ocupada"
-BDhg$vivienda_ocupada <- factor(BDhg$vivienda_ocupada)
 
-names(BDhg)[names(BDhg) == "P5100"] <- "Cuota_am"
-names(BDhg)[names(BDhg) == "P5140"] <- "Arriendo"
+names(train_hogares)[names(train_hogares) == "P5090"] <- "vivienda_ocupada"
+train_hogares$vivienda_ocupada <- factor(train_hogares$vivienda_ocupada)
 
-saveRDS(train_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/BDhg.rds")
+names(train_hogares)[names(train_hogares) == "P5100"] <- "Cuota_am"
+names(train_hogares)[names(train_hogares) == "P5140"] <- "Arriendo"
+
+colnames(train_hogares)
+saveRDS(train_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/train_hogares_p.rds")
 
 #personas#
 names(test_personas)[names(test_personas) == "P6040"] <- "Edad"
 names(test_personas)[names(test_personas) == "P6426"] <- "Antiguedad_TB"
 names(test_personas)[names(test_personas) == "P6050"] <- "Jefe_de_hogar"
-test_personas$mujer <- test_personas$mujer  - 1  
+test_personas$Jefe_de_hogar <- test_personas$Jefe_de_hogar  - 1  
 names(test_personas)[names(test_personas) == "P6020"] <- "mujer"
 test_personas$mujer <- test_personas$mujer  - 1  
 
@@ -142,7 +145,7 @@ test_hogares$horas_trabP <- ifelse(is.na(test_hogares$horas_trabP),
                                         test_hogares$horas_trabP)
 
 
-names(BDhg)[names(BDhg) == "Pobre"] <- "pobre"
+names(train_hogares)[names(BDhogar) == "Pobre"] <- "pobre"
 
 horastrab_train <- train_personas %>% group_by(id) %>% summarize(horastrab_prom = mean(P6800, na.rm = TRUE))
 summary(horastrab_train)
@@ -158,17 +161,23 @@ Phg$horastrab_prom <- ifelse(is.na(Phg$horastrab_prom),
                                                   mean(Phg$horastrab_prom, na.rm = TRUE), 
                                                   0), 
                                            Phg$horastrab_prom)
+#promedio de edad en quienes conformar el hogar#
+
+Edad_prom <- test_personas %>% group_by(id) %>% summarize(edad_prom_h = mean(Edad, na.rm = TRUE))
+summary(Edad_prom)
+
+test_hogares <- left_join(test_hogares, Edad_prom)
+colnames(test_hogares)
+
+# Train
+edad_train <- train_personas %>% group_by(id) %>% summarize(edad_prom_h = mean(P6040, na.rm = TRUE))
+summary(edad_train)
+
+Phg <- left_join(Phg, edad_train)
+colnames(Phg)
+
 
 ## Eliminar NA
-
-test_hogares <- subset(test_hogares, select = -Cuota_amortización)
-BDhg <- subset(BDhg, select = -Cuota_amortización)
-
-na_count <- colSums(is.na(test_hogares))
-na_count <- sort(na_count, decreasing = TRUE)
-
-test_hogares <- subset(test_hogares, select = -Arriendo)
-Phg <- subset(Phg, select = -Arriendo)
 
 test_hogares <- subset(test_hogares, select = -P5130)
 Phg <- subset(Phg, select = -P5130)
