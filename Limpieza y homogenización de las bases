@@ -217,8 +217,9 @@ table(test_hogares$max_educ)
 
 test_hogares$max_educ <- factor(test_hogares$max_educ)
 
-Phg <- left_join(Phg, ING)
-colnames(Phg)
+Phg2 <- left_join(train_hogares, ING)
+colnames(Phg2)
 
-saveRDS(Phg, "/Users/ncoro/Desktop/2023/BML/TALLER 3/train_hogV.rds")
+saveRDS(Phg2, "/Users/ncoro/Desktop/2023/BML/TALLER 3/train_hogV2.rds")
 saveRDS(test_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/test_hogaresV.rds")
+
