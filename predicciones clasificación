@@ -1,0 +1,99 @@
+      ## Predicciones de clasificación ##
+#Abrir bases#
+base <- readRDS("/content/aaa.rds")
+test <- readRDS("/content/testaaa.rds")
+
+## realizar balance por medio de upsampling ##
+rec <- recipe(Pobre ~ Dominio + Num_cuartos + Tipo_vivienda  + Nper + Npersug + Depto + Num_personas_cuarto + 
+  edad_prom_h + horastrab_prom_h + max_educ_h, data = base) %>%
+  step_normalize(all_numeric_predictors()) %>%
+  step_upsample(Pobre, over_ratio = .5)
+
+train_data_over <- prep(rec) %>% bake(new_data = NULL)
+
+# Control de ajuste para bosuqes #
+fitControl1<-trainControl(method ="cv",
+                         number=5)
+
+# Entrenar random forest #
+
+rf <- train(Pobre ~ Dominio + Num_cuartos + Tipo_vivienda  + Nper + Npersug + Num_personas_cuarto + edad_prom_h + horastrab_prom_h + max_educ_h,
+  data = train_data_over,
+  method = "ranger",  
+  trControl = fitControl1,
+  tuneGrid=expand.grid(
+              mtry = 2,
+              splitrule = "gini",
+              min.node.size = 1000)
+)
+
+# realizar prediccion y guardar datos #
+
+test <- readRDS("/content/testaaa.rds")
+test$predict <- predict(rf, newdata = test)
+predict1 <- select(test, predict, id)
+
+# rf con diferentes parametros #
+
+rf2 <- train(Pobre ~ Dominio + Num_cuartos + Tipo_vivienda  + Nper + Npersug + Num_personas_cuarto + edad_prom_h + horastrab_prom_h + max_educ_h,
+  data = train_data_over,
+  method = "ranger",  
+  trControl = fitControl1,
+  tuneGrid=expand.grid(
+              mtry = 4,
+              splitrule = "gini",
+              min.node.size = 500)
+)
+
+test$predict2 <- predict(rf2, newdata = test)
+predict2 <- select(test, predict2, id)
+fwrite(predict2, file = "/content/predict2.csv")
+
+# Boosting #
+
+boost_model <- train(
+  Pobre ~ Dominio + Num_cuartos + Tipo_vivienda + Nper + Npersug + Num_personas_cuarto + edad_prom_h + horastrab_prom_h + max_educ_h,
+  data = train_data_over,
+  method = "xgbTree", 
+  trControl = fitControl1,
+  tuneGrid = expand.grid(
+    nrounds = 100,  
+    max_depth = 4,  
+    eta = 0.3,
+    gamma = 0,  
+    colsample_bytree = 1,  
+    min_child_weight = 1,  
+    subsample = 1  
+  )
+)
+
+test$predict3 <- predict(boost_model, newdata = test)
+predict3 <- select(test, predict3, id)
+fwrite(predict3, file = "/content/predict3.csv")
+
+#Boosting modelo 2#
+
+boost_model2 <- train(
+  Pobre ~ Dominio + Num_cuartos + Tipo_vivienda + Nper + Npersug + Num_personas_cuarto + edad_prom_h + horastrab_prom_h + max_educ_h,
+  data = train_data_over,
+  method = "xgbTree",  # Método específico para árboles de boosting con xgboost
+  trControl = fitControl1,
+  tuneGrid = expand.grid(
+    nrounds = 200,  
+    max_depth = 4,  
+    eta = 0.3,
+    gamma = 0.5,  # Ajusta según sea necesario
+    colsample_bytree = 0.7,  # Ajusta según sea necesario
+    min_child_weight = 100,  # Ajusta según sea necesario
+    subsample = 1  # Ajusta según sea necesario
+  )
+)
+
+test$predict4 <- predict(boost_model2, newdata = test)
+predict4 <- select(test, predict4, id)
+fwrite(predict4, file = "/content/predict4.csv")
+
+
+
+
+
