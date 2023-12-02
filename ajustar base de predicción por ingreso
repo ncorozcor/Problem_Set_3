@@ -1,0 +1,238 @@
+
+require(pacman)
+
+p_load(tidyverse,rio,
+       sf,
+       rstudioapi,
+       stargazer,
+       glmnet,
+       MLmetrics)
+p_load(caret)
+
+# cargar base
+test_hogares <- readRDS("../stores/test_hogares.rds")
+Phgs <- readRDS("../stores/ptrain_hogares.rds")
+
+
+## Creación logaritmo de ingreso (LING) ####
+Phgs$t_INGH <- ifelse(Phgs$t_INGH == 0, 0.1, Phgs$t_INGH)
+Phgs$LING <- log(Phgs$t_INGH)
+
+
+## Volviendo factor la variable Dominio
+test_hogares$Dominio <- factor(test_hogares$Dominio)
+class(test_hogares$Dominio)
+
+Phgs$Dominio <- factor(Phgs$Dominio)
+class(Phgs$Dominio)
+
+## Estandarizar variable edad ####
+mu <- mean(Phgs$edad_prom_h)
+sigma <- sd(Phgs$edad_prom_h)
+Phgs$estedad_prom_h <- (Phgs$edad_prom_h - mu)/sigma
+test_hogares$estedad_prom_h <- (test_hogares$edad_prom_h - mu)/sigma
+
+## Estandarizar variable horas_trabajadas ####
+mu <- mean(Phgs$horastrab_prom_h)
+sigma <- sd(Phgs$horastrab_prom_h)
+Phgs$esthorastrab_prom_h <- (Phgs$horastrab_prom_h - mu)/sigma
+test_hogares$esthorastrab_prom_h <- (test_hogares$horastrab_prom_h - mu)/sigma
+
+## Eliminar variable Depto
+Phgs <- subset(Phgs, select = -Depto)
+test_hogares <- subset(test_hogares, select = -Depto)
+
+
+#Predicting Income -----
+# Selección de la penalización
+set.seed(9873)
+block_folds <- trainControl(method = "cv", number = 5)
+
+## Elastic Net ####
+### EN Model 1 ####
+EN <- train(LING ~ Dominio+Num_cuartos+P5010+Tipo_vivienda+Nper+Npersug+Li+Lp+pobre+
+              Num_personas_cuarto+edad_prom_h+horastrab_prom_h+max_educ_h,
+            data = Phgs,
+            method = 'glmnet', 
+            trControl = block_folds,
+            tuneGrid = expand.grid(alpha = seq(0,1,0.1),
+                                   lambda = seq(0.001,0.2,0.01))
+)
+plot(EN)
+mejor_lambda_EN <- EN$bestTune
+
+## Predecir income
+y_hat_in_EN <- predict(EN, newdata = Phgs, s = mejor_lambda_EN)
+y_hat_in_EN_cop <- exp(y_hat_in_EN)
+
+y_hat_out_EN <- predict(EN, newdata = test_hogares, s = mejor_lambda_EN)
+y_hat_out_EN_cop <- exp(y_hat_out_EN)
+
+options(scipen = 1000)
+summary(y_hat_out_EN_cop)
+
+## Métricas dentro de muestra
+r2_in_EN <- R2_Score(y_pred = y_hat_in_EN_cop, y_true = Phgs$t_INGH)
+
+error_EN <- y_hat_in_EN_cop - Phgs$t_INGH
+RMSE_in_EN <- sqrt(mean(error_EN^2))
+
+resultados1 <- data.frame(Modelo = "ENStd", 
+                          Muestra = "Dentro",
+                          R2_Score = r2_in_EN, 
+                          RMSE = RMSE_in_EN)
+#MD2#
+MDEN2 <- train(LING ~ Dominio+Num_cuartos+P5010+Tipo_vivienda+Nper+Npersug+Li+Lp+pobre+
+               Num_personas_cuarto+edad_prom_h+horastrab_prom_h+max_educ_h,
+             data = Phgs,
+             method = 'glmnet', 
+             trControl = block_folds,
+             tuneGrid = expand.grid(alpha = seq(0,1,length.out = 20),
+                                    lambda = seq(0.001,0.2,length.out = 50))
+)
+plot(MDEN2)
+mejor_lambda_MDEN2 <- MDEN2$bestTune
+
+## Predecir ingreso
+y_hat_in_EN <- predict(MDEN2, newdata = Phgs, s = mejor_lambda_MDEN2)
+y_hat_in_EN_cop <- exp(y_hat_in_EN)
+
+y_hat_out_EN <- predict(MDEN2, newdata = test_hogares, s = mejor_lambda_MDEN2)
+y_hat_out_EN_cop <- exp(y_hat_out_EN)
+
+summary(y_hat_out_EN_cop)
+
+## Métricas dentro de muestra
+r2_in_MDEN2 <- R2_Score(y_pred = y_hat_in_EN_cop, y_true = Phgs$t_ING)
+
+error_MDEN2 <- y_hat_in_EN_cop - Phgs$t_ING
+RMSE_in_MDEN2 <- sqrt(mean(error_MDEN2^2))
+
+resultados2 <- data.frame(Modelo = "EN", 
+                          Muestra = "Dentro",
+                          R2_Score = r2_in_MDEN2, 
+                          RMSE = RMSE_in_MDEN2)
+
+### Results EN #####
+resultados <- rbind(resultados1, resultados2)
+resultados
+predict_en <- data.frame(id = test_hogares$id, t_ING = y_hat_out_EN_cop)
+
+write.csv(predict_en, file = "/Users/ncoro/Desktop/2023/BML/TALLER 3/prediccion/predict_en.csv", row.names = FALSE)
+
+
+## Ridge ####
+
+set.seed(9873)
+block_folds <- trainControl(method = "cv", number = 5)
+
+lasso0 <- glmnet(
+  x = X_trainstd,
+  y = y,
+  alpha = 1 #lasso
+)
+
+plot(lasso0, xvar = "lambda")
+
+ridge <- train(LING ~ Dominio+Num_cuartos+P5010+Tipo_vivienda+Nper+Npersug+Li+Lp+pobre+
+                 Num_personas_cuarto+edad_prom_h+horastrab_prom_h+max_educ_h,
+               data = Phgs,
+               method = 'glmnet', 
+               trControl = block_folds,
+               tuneGrid = expand.grid(alpha = 0, #ridge
+                                      lambda = lasso0$lambda)
+) 
+
+mejor_lambda_ridge <- ridge$bestTune
+
+## Predecir income
+y_hat_in_ridge <- predict(ridge, newdata = Phgs, s = mejor_lambda_ridge)
+y_hat_in_ridge_cop <- exp(y_hat_in_ridge)
+
+y_hat_out_ridge <- predict(ridge, newdata = test_hogares, s = mejor_lambda_ridge)
+y_hat_out_ridge_cop <- exp(y_hat_out_ridge)
+
+summary(y_hat_out_ridge_cop)
+
+## Métricas dentro de muestra
+r2_in_ridge <- R2_Score(y_pred = y_hat_in_ridge_cop, y_true = Phgs$t_ING)
+
+error_ridge <- y_hat_in_ridge_cop - Phgs$t_ING
+RMSE_in_ridge <- sqrt(mean(error_ridge^2))
+
+resultados5 <- data.frame(Modelo = "RidgeStd", 
+                          Muestra = "Dentro",
+                          R2_Score = r2_in_ridge, 
+                          RMSE = RMSE_in_ridge)
+
+
+### Ridge Model 2 ####
+set.seed(9873)
+block_folds <- trainControl(method = "cv", number = 5)
+
+lasso0 <- glmnet(
+  x = X_train,
+  y = y,
+  alpha = 1 #lasso
+)
+
+plot(lasso0, xvar = "lambda")
+
+ridge2 <- train(LING ~ Dominio+Num_cuartos+P5010+Tipo_vivienda+Nper+Npersug+Li+Lp+pobre+
+                  Num_personas_cuarto+edad_prom_h+horastrab_prom_h+max_educ_h,
+                data = Phgs,
+                method = 'glmnet', 
+                trControl = block_folds,
+                tuneGrid = expand.grid(alpha = 0, #ridge
+                                       lambda = lasso0$lambda)
+) 
+
+mejor_lambda_ridge2 <- ridge2$bestTune
+
+## Predecir income
+y_hat_in_ridge <- predict(ridge2, newdata = Phgs, s = mejor_lambda_ridge2)
+y_hat_in_ridge_cop <- exp(y_hat_in_ridge)
+
+y_hat_out_ridge <- predict(ridge2, newdata = test_hogares, s = mejor_lambda_ridge2)
+y_hat_out_ridge_cop <- exp(y_hat_out_ridge)
+
+summary(y_hat_out_ridge_cop)
+
+## Métricas dentro de muestra
+r2_in_ridge2 <- R2_Score(y_pred = y_hat_in_ridge_cop, y_true = Phgs$t_ING)
+
+error_ridge2 <- y_hat_in_ridge_cop - Phgs$t_ING
+RMSE_in_ridge2 <- sqrt(mean(error_ridge2^2))
+
+resultados6 <- data.frame(Modelo = "Ridge", 
+                          Muestra = "Dentro",
+                          R2_Score = r2_in_ridge2, 
+                          RMSE = RMSE_in_ridge2)
+
+### Results ridge #####
+resultados <- rbind(resultados1, resultados2, resultados3, resultados4, resultados5, resultados6)
+resultados
+
+predict_ridge <- data.frame(id = test_hogares$id, t_ING = y_hat_out_ridge_cop)
+saveRDS(predict_ridge, "/Users/ncoro/Desktop/2023/BML/TALLER 3/prediccionpredict_ridge.rds")
+
+write.csv(predict_ridge, file = "/Users/ncoro/Desktop/2023/BML/TALLER 3/prediccion/predict_ridge.csv", row.names = FALSE)
+
+
+
+# Bases con predicción de ingreso
+ien_test_hogares <- left_join(test_hogares, predict_en)
+ilasso_test_hogares <- left_join(test_hogares, predict_lasso)
+iridge_test_hogares <- left_join(test_hogares, predict_ridge)
+itrain_hogares <- subset(Phgs,select = -LING)
+
+# cual fue el mejor lambda de cada modelo#
+list_lambda <- list(mejor_lambda_EN, mejor_lambda_MDEN2,
+                    mejor_lambda_ridge, mejor_lambda_ridge2)
+
+merged_lambda <- do.call(rbind, list_lambda)
+merged_lambda
+
+saveRDS(ien_test_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/prediccionien_test_hogares.rds") 
+saveRDS(iridge_test_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/prediccioniridge_test_hogares.rds") 
+saveRDS(i_train_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/prediccioni_train_hogares.rds")
