@@ -17,209 +17,253 @@ p_load(tidyverse)
 library(dplyr)
 
 #Revisar las variables de cada base
-
+# Personas
 names(train_personas)
 glimpse(train_personas)
 
 names(test_personas)
 glimpse(test_personas)
 
+# Hogares
 names(train_hogares)
 glimpse(train_hogares)
 
 names(test_hogares)
 glimpse(test_hogares)
 
-var_com_train <- intersect(names(train_personas), names(train_hogares))
-var_com_train
+common_var_train <- intersect(names(train_personas), names(train_hogares))
+common_var_train
 
-#Revisemos si podemos cruzar por ID de cada base
+# Creating variables ----- 
 
-t_id <- unique(test_hogares$id)
-id_in_train <- t_id %in% train_hogares$id
-t_id[id_in_train]
+# Revisemos si hay repetición de ID en las bases
+test_id <- unique(test_hogares$id)
+test_id_in_train <- test_id %in% train_hogares$id
+test_id[test_id_in_train] 
 
-id_in_trainp <- t_id %in% train_personas$id
-t_id[id_in_trainp] 
+## No hay ID de la base test_hogares en Train_hogares
 
-id_sub <- t_id %in% sample_submission$id
-t_id[id_sub]
-#colige#
+test_id <- unique(test_hogares$id)
+test_id_in_trainp <- test_id %in% train_personas$id
+test_id[test_id_in_trainp] 
 
-## Por tanto vemos que lo podemos unir la base de hogares con individuos del sample submission
+## No hay ID de la base test_hogares en Train_personas
+
+test_id_in_sub <- test_id %in% sample_submission$id
+test_id[test_id_in_sub]
+
+##Combinemos el sample sumbmission
+
 test_hogares <- left_join(test_hogares, sample_submission)
 colnames(test_hogares)
 
-## Creemos variables similares para ambas bases##
-table(train_hogares$Pobre)
+# Para calcular la pobreza vamos a revisar la relación que existe enre otras variables
+
+table(train_hogares$pobre)
 train_hogares <- train_hogares %>% mutate(Hpobre = ifelse(Ingpcug < Lp, 1, 0))
 table(train_hogares$Hpobre, train_hogares$Pobre)
 
-train_hogares <- train_hogares %>% mutate(Hpobre2 = ifelse(Ingtotugarr < Lp*Npersug, 1, 0))
-table(train_hogares$Pobre, train_hogares$Hpobre2)
+train_hogares <- train_hogares %>% mutate(pobre_h = ifelse(Ingtotugarr < Lp*Npersug, 1, 0))
+table(train_hogares$Pobre, train_hogares$pobre_h)
 
-## Creamos variable ingreso en Base train y test de personas##
-
-ING <- train_personas %>% group_by(id) %>% summarize(ING_h = sum(Ingtot, na.rm = TRUE))
+#Ingreso total del hogar#
+ING <- train_personas %>% group_by(id) %>% summarize(t_INGH = sum(Ingtot, na.rm = TRUE))
 summary(ING)
 
-BDper <- setdiff(names(train_personas), names(test_personas))
-BDper <- BDper[BDper != "Ingtot"]
-length(BDper)
-npertrain <- train_personas %>% select(-all_of(BDper))
 
-##Creamos base hogares para variable pobre e ingreso#
+# Colocamos las mismas variables para las BD train y test#
 
-BDhogar <- setdiff(names(train_hogares), names(test_hogares))
-length(BDhogar)
-BDhogar <- BDhogar[BDhogar != "Pobre"]
-Phg <- train_hogares %>% select(-all_of(BDhogar))  
+# Personas
+diff_personas <- setdiff(names(train_personas), names(test_personas))
+diff_personas <- diff_personas[diff_personas != "Ingtot"]
+length(diff_personas)
+ntrain_personas <- train_personas %>% select(-all_of(diff_personas))
 
-BDhogar <- setdiff(names(train_hogares), names(test_hogares))
-BDhogar_i <- BDhogar[BDhogar != "TINGhg"]
-I_trainhg <- train_hogares %>% select(-all_of(BDhogar_i)) 
+# Hogares
+diff_hogares <- setdiff(names(train_hogares), names(test_hogares))
+length(diff_hogares)
+diff_hogares <- diff_hogares[diff_hogares != "Pobre"]
+ptrain_hogares <- train_hogares %>% select(-all_of(diff_hogares))  ## Dependent variable Pobre
 
-## Para mayor entendimiento de los datos renombramos las variables ##
+diff_hogares <- setdiff(names(train_hogares), names(test_hogares))
+diff_hogares_i <- diff_hogares[diff_hogares != "t_INGH"]
+itrain_hogares <- train_hogares %>% select(-all_of(diff_hogares_i))  ## Dependent variable t_INGH
 
-#Hogar#
+saveRDS(ntrain_personas, "/Users/ncoro/Desktop/2023/BML/TALLER 3/ntrain_personas.rds")
+saveRDS(ptrain_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/ptrain_hogares.rds")
+saveRDS(itrain_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/itrain_hogares.rds") 
 
-names(test_hogares)[names(test_hogares) == "P5090"] <- "vivienda_ocupada"
-test_hogares$vivienda_ocupada <- factor(test_hogares$vivienda_ocupada)
+# Colocar nombre a las variables a utilizar ##
 
-names(test_hogares)[names(test_hogares) == "P5100"] <- "Cuota_am"
+#Hogares#
+
+#Para test
+names(test_hogares)[names(test_hogares) == "P5000"] <- "Num_cuartos"
+names(test_hogares)[names(test_hogares) == "P5100"] <- "Cuota_amortización"
 names(test_hogares)[names(test_hogares) == "P5140"] <- "Arriendo"
+
+names(test_hogares)[names(test_hogares) == "P5090"] <- "Tipo_vivienda"
+test_hogares$Tipo_vivienda <- factor(test_hogares$Tipo_vivienda)
+
+test_hogares <- test_hogares %>% mutate(Num_personas_cuarto = Nper/P5010)
 
 saveRDS(test_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/test_hogares.rds")
 
+#Para train
+names(itrain_hogares)[names(itrain_hogares) == "P5000"] <- "Num_cuartos"
+names(itrain_hogares)[names(itrain_hogares) == "P5100"] <- "Cuota_amortización"
+names(itrain_hogares)[names(itrain_hogares) == "P5140"] <- "Arriendo"
 
-names(train_hogares)[names(train_hogares) == "P5090"] <- "vivienda_ocupada"
-train_hogares$vivienda_ocupada <- factor(train_hogares$vivienda_ocupada)
+names(itrain_hogares)[names(itrain_hogares) == "P5090"] <- "Tipo_vivienda"
+itrain_hogares$Tipo_vivienda <- factor(itrain_hogares$Tipo_vivienda)
 
-names(train_hogares)[names(train_hogares) == "P5100"] <- "Cuota_am"
-names(train_hogares)[names(train_hogares) == "P5140"] <- "Arriendo"
+itrain_hogares <- itrain_hogares %>% mutate(Num_personas_cuarto = Nper/P5010)
 
-colnames(train_hogares)
-saveRDS(train_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/train_hogares_p.rds")
+saveRDS(itrain_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/itrain_hogares.rds")
 
-#personas#
-names(test_personas)[names(test_personas) == "P6040"] <- "Edad"
-names(test_personas)[names(test_personas) == "P6426"] <- "Antiguedad_TB"
-names(test_personas)[names(test_personas) == "P6050"] <- "Jefe_de_hogar"
-test_personas$Jefe_de_hogar <- test_personas$Jefe_de_hogar  - 1  
+#Entrenemos con la otra base
+names(ptrain_hogares)[names(ptrain_hogares) == "P5000"] <- "Num_cuartos"
+names(ptrain_hogares)[names(ptrain_hogares) == "P5100"] <- "Cuota_amortización"
+names(ptrain_hogares)[names(ptrain_hogares) == "P5140"] <- "Arriendo"
+
+names(ptrain_hogares)[names(ptrain_hogares) == "P5090"] <- "Tipo_vivienda"
+ptrain_hogares$Tipo_vivienda <- factor(ptrain_hogares$Tipo_vivienda)
+
+ptrain_hogares <- ptrain_hogares %>% mutate(Num_personas_cuarto = Nper/P5010)
+
+saveRDS(ptrain_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/ptrain_hogares.rds")
+
+#Personas#
+
+#Test
 names(test_personas)[names(test_personas) == "P6020"] <- "mujer"
-test_personas$mujer <- test_personas$mujer  - 1  
+test_personas$mujer <- test_personas$mujer  - 1
 
-names(test_personas)[names(test_personas) == "P6210"] <- "edu"
-test_personas$edu <- factor(test_personas$edu)
+names(test_personas)[names(test_personas) == "P6040"] <- "Edad"
+
+names(test_personas)[names(test_personas) == "P6210"] <- "Nivel_educ"
+test_personas$Nivel_educ <- factor(test_personas$Nivel_educ)
 
 saveRDS(test_personas, "/Users/ncoro/Desktop/2023/BML/TALLER 3/test_personas.rds")
 
-names(npertrain)[names(npertrain) ==  "P6040"] <- "Edad"
-names(npertrain)[names(npertrain) == "P6426"] <- "Antiguedad_TB"
 
-names(npertrain)[names(npertrain) == "P6020"] <- "mujer"
-npertrain$mujer <- npertrain$mujer  - 1
+#Train
+names(ntrain_personas)[names(ntrain_personas) == "P6020"] <- "mujer"
+ntrain_personas$mujer <- ntrain_personas$mujer  - 1
 
-names(npertrain)[names(npertrain) == "P6210"] <- "edu"
-npertrain$edu <- factor(npertrain$edu)
+names(ntrain_personas)[names(ntrain_personas) == "P6040"] <- "Edad"
 
-saveRDS(npertrain, "/Users/ncoro/Desktop/2023/BML/TALLER 3/npertrain.rds")
+names(ntrain_personas)[names(ntrain_personas) == "P6210"] <- "Nivel_educ"
+ntrain_personas$Nivel_educ <- factor(ntrain_personas$Nivel_educ)
 
-#Pasamos variables de base personas a hogares ##
+saveRDS(ntrain_personas, "/Users/ncoro/Desktop/2023/BML/TALLER 3/ntrain_personas.rds")
 
-#saquemos promedio de horas trabajadas#
 
-horas_trab <- test_personas %>% group_by(id) %>% summarize(horas_trabP = mean(P6800, na.rm = TRUE))
-summary(horas_trab)
+##Agregar variable##
 
-test_hogares <- left_join(test_hogares, horas_trab)
+## Promedio Edad  por hogar
+
+# Test
+sum_edad <- test_personas %>% group_by(id) %>% summarize(edad_prom_h = mean(Edad, na.rm = TRUE))
+summary(sum_edad)
+
+test_hogares <- left_join(test_hogares, sum_edad)
+colnames(test_hogares)
+
+# Train
+sum_edad_train <- train_personas %>% group_by(id) %>% summarize(edad_prom_h = mean(P6040, na.rm = TRUE))
+summary(sum_edad_train)
+
+ptrain_hogares <- left_join(ptrain_hogares, sum_edad_train)
+colnames(ptrain_hogares)
+
+## Promedio Horas trabajadas ####
+# Test
+sum_horastrab <- test_personas %>% group_by(id) %>% summarize(horastrab_prom_h = mean(P6800, na.rm = TRUE))
+summary(sum_horastrab)
+
+test_hogares <- left_join(test_hogares, sum_horastrab)
 colnames(test_hogares)
 
 na_count <- colSums(is.na(test_hogares))
 na_count <- sort(na_count, decreasing = TRUE)
 
-test_hogares$horas_trabP <- ifelse(is.na(test_hogares$horas_trabP), 
+test_hogares$horastrab_prom_h <- ifelse(is.na(test_hogares$horastrab_prom_h), 
                                         ifelse(test_hogares$pobre == 0, 
-                                               mean(test_hogares$horas_trabP, na.rm = TRUE), 
+                                               mean(test_hogares$horastrab_prom_h, na.rm = TRUE), 
                                                0), 
-                                        test_hogares$horas_trabP)
+                                        test_hogares$horastrab_prom_h)
+# Train
+names(ptrain_hogares)[names(ptrain_hogares) == "Pobre"] <- "pobre"  # Rename Pobre variable
 
+sum_horastrab_train <- train_personas %>% group_by(id) %>% summarize(horastrab_prom_h = mean(P6800, na.rm = TRUE))
+summary(sum_horastrab_train)
 
-names(train_hogares)[names(BDhogar) == "Pobre"] <- "pobre"
+ptrain_hogares <- left_join(ptrain_hogares, sum_horastrab_train)
+colnames(ptrain_hogares)
 
-horastrab_train <- train_personas %>% group_by(id) %>% summarize(horastrab_prom = mean(P6800, na.rm = TRUE))
-summary(horastrab_train)
-
-Phg <- left_join(Phg, horastrab_train)
-colnames(Phg)
-
-na_count <- colSums(is.na(Phg))
+na_count <- colSums(is.na(ptrain_hogares))
 na_count <- sort(na_count, decreasing = TRUE)
 
-Phg$horastrab_prom <- ifelse(is.na(Phg$horastrab_prom), 
-                                           ifelse(Phg$pobre == 0, 
-                                                  mean(Phg$horastrab_prom, na.rm = TRUE), 
+ptrain_hogares$horastrab_prom_h <- ifelse(is.na(ptrain_hogares$horastrab_prom_h), 
+                                           ifelse(ptrain_hogares$pobre == 0, 
+                                                  mean(ptrain_hogares$horastrab_prom_h, na.rm = TRUE), 
                                                   0), 
-                                           Phg$horastrab_prom)
-#promedio de edad en quienes conformar el hogar#
+                                           ptrain_hogares$horastrab_prom_h)
 
-Edad_prom <- test_personas %>% group_by(id) %>% summarize(edad_prom_h = mean(Edad, na.rm = TRUE))
-summary(Edad_prom)
+## Eliminar variables
+test_hogares <- subset(test_hogares, select = -Cuota_amortización)
+ptrain_hogares <- subset(ptrain_hogares, select = -Cuota_amortización)
 
-test_hogares <- left_join(test_hogares, Edad_prom)
-colnames(test_hogares)
+na_count <- colSums(is.na(test_hogares))
+na_count <- sort(na_count, decreasing = TRUE)
 
-# Train
-edad_train <- train_personas %>% group_by(id) %>% summarize(edad_prom_h = mean(P6040, na.rm = TRUE))
-summary(edad_train)
-
-Phg <- left_join(Phg, edad_train)
-colnames(Phg)
-
-
-## Eliminar NA
+test_hogares <- subset(test_hogares, select = -Arriendo)
+ptrain_hogares <- subset(ptrain_hogares, select = -Arriendo)
 
 test_hogares <- subset(test_hogares, select = -P5130)
-Phg <- subset(Phg, select = -P5130)
+ptrain_hogares <- subset(ptrain_hogares, select = -P5130)
 
 test_hogares <- subset(test_hogares, select = -c(Clase, Fex_c, Fex_dpto))
-Phg<- subset(Phg, select = -c(Clase, Fex_c, Fex_dpto))
+ptrain_hogares<- subset(ptrain_hogares, select = -c(Clase, Fex_c, Fex_dpto))
 
+#P6210 - Nivel maximo alacanzado por persona#
 
+# Train
 train_personas$P6210 <- ifelse(is.na(train_personas$P6210), 
                                0, train_personas$P6210)
 
 train_personas$P6210 <- ifelse(train_personas$P6210 == 9, 
                                0, train_personas$P6210)                               
 
-educ <- train_personas %>% group_by(id) %>% summarize(max_educ = max(P6210, na.rm = TRUE))
-summary(educ)
+sum_educ <- train_personas %>% group_by(id) %>% summarize(max_educ_h = max(P6210, na.rm = TRUE))
+summary(sum_educ)
 
-Phg <- left_join(Phg, educ)
-colnames(Phg)
-table(Phg$max_educ)
+ptrain_hogares <- left_join(ptrain_hogares, sum_educ)
+colnames(ptrain_hogares)
+table(ptrain_hogares$max_educ_h)
 
-Phg$max_educ <- factor(Phg$max_educ)
+ptrain_hogares$max_educ_h <- factor(ptrain_hogares$max_educ_h)
 
 # Test   
-test_personas$edu <- ifelse(is.na(test_personas$edu), 
-                                   0, test_personas$edu)
+test_personas$Nivel_educ <- ifelse(is.na(test_personas$Nivel_educ), 
+                                   0, test_personas$Nivel_educ)
 
-test_personas$edu <- ifelse(test_personas$edu == 7, 
-                                   0, test_personas$edu) 
+test_personas$Nivel_educ <- ifelse(test_personas$Nivel_educ == 7, 
+                                   0, test_personas$Nivel_educ) 
 
-edu_test <- test_personas %>% group_by(id) %>% summarize(max_educ = max(edu, na.rm = TRUE))
-summary(edu_test)
+sum_educ_test <- test_personas %>% group_by(id) %>% summarize(max_educ_h = max(Nivel_educ, na.rm = TRUE))
+summary(sum_educ_test)
 
-test_hogares <- left_join(test_hogares, edu_test)
+test_hogares <- left_join(test_hogares, sum_educ_test)
 colnames(test_hogares)
-table(test_hogares$max_educ)
+table(test_hogares$max_educ_h)
 
-test_hogares$max_educ <- factor(test_hogares$max_educ)
+test_hogares$max_educ_h <- factor(test_hogares$max_educ_h)
 
-Phg2 <- left_join(train_hogares, ING)
-colnames(Phg2)
+# Variable ingreso t_INGH a train_hogares
+ptrain_hogares <- left_join(ptrain_hogares, ING)
+colnames(ptrain_hogares)
 
-saveRDS(Phg2, "/Users/ncoro/Desktop/2023/BML/TALLER 3/train_hogV2.rds")
-saveRDS(test_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/test_hogaresV.rds")
-
+saveRDS(ptrain_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/ptrain_hogares.rds")
+saveRDS(test_hogares, "/Users/ncoro/Desktop/2023/BML/TALLER 3/test_hogares.rds")
