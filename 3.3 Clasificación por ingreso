@@ -1,0 +1,59 @@
+require(pacman)
+library(tidyverse)
+p_load(tidyverse,
+       rio,
+       sf,
+       rstudioapi,
+       stargazer,
+       glmnet,
+       MLmetrics,
+       caret,
+       dplyr)
+
+# importar Bases
+ien_test_hogares <- readRDS("/Users/ncoro/Desktop/2023/BML/TALLER 3/prediccionien_test_hogares.rds")
+ilasso_test_hogares <- readRDS("/Users/ncoro/Desktop/2023/BML/TALLER 3/predict_lasso.rds")
+iridge_test_hogares <- readRDS("/Users/ncoro/Desktop/2023/BML/TALLER 3/prediccioniridge_test_hogares.rds")
+itrain_hogares <- readRDS("/Users/ncoro/Desktop/2023/BML/TALLER 3/prediccionitrain_hogaress.rds")
+
+
+# Clasificación de 1 y 0 con income predicho EN
+ien_test_hogares$pobre_p_1 <- ifelse(ien_test_hogares$t_ING >= ien_test_hogares$Lp, 0, 1)
+
+# Clasificación de 1 y 0 con income predicho Lasso
+ilasso_test_hogares$pobre_p_1 <- ifelse(ilasso_test_hogares$t_ING >= ilasso_test_hogares$Lp, 0, 1)
+
+# Clasificación de 1 y 0 con income predicho Ridge
+iridge_test_hogares$pobre_p_1 <- ifelse(iridge_test_hogares$t_ING >= iridge_test_hogares$Lp, 0, 1)
+
+
+# Guardar base para subir predicción
+p_load(dplyr)
+
+# Elastic Net
+predicciones_ENING <- ien_test_hogares[,c(1,17)]
+predicciones_ENING <- predicciones_ENING %>% rename(pobre = pobre_p_1)
+
+write.csv(predicciones_ENING, "/Users/ncoro/Desktop/2023/BML/TALLER 3/prediccion/predicciones_ENING.csv", row.names = FALSE)
+
+
+# Lasso
+predicciones_LassoING <- ilasso_test_hogares[,c(1,2)]
+
+table(predicciones_LassoING$pobre)
+predicciones_LassoING <- predicciones_LassoING %>% mutate(Pobre = ifelse(t_INGH < 3038107, 1, 0))
+
+ilasso_test_hogares2 <- ilasso_test_hogares %>% select(-t_INGH)
+
+colnames(ilasso_test_hogares)[colnames(ilasso_test_hogares) == "Hpobre"] <- "pobre"
+write.csv(ilasso_test_hogares2, file = "/Users/ncoro/Desktop/2023/BML/TALLER 3/prediccion/ilasso_test_hogares2.csv", row.names = FALSE)
+
+# Ridge
+predicciones_RidgeING <- iridge_test_hogares[,c(1,17)]
+predicciones_RidgeING <- predicciones_RidgeING %>% rename(pobre = pobre_p_1)
+
+write.csv(predicciones_RidgeING, "/Users/ncoro/Desktop/2023/BML/TALLER 3/prediccion/prediccion_RidgeING.csv", row.names = FALSE)
+
+
+
+
