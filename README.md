@@ -5,6 +5,6 @@ En el siguiente repositorio se encuentra el desarrollo del codigo realizado para
 
 3.1 Clasificación: Se encuentra la clasificación de pobreza a apartir de modelos y especificaciones de muestra ya que se relizó los modelos Logit, Rigde, lasso y Elastic Net.
 
-3.2 Clasifiación: Se encuentra la clasificación de pobreza a apartir de modelos y especificaciones de muestra ya que se relizó los modelos Random forest y Boosting igde.
+3.2 Clasificación: Se encuentra la clasificación de pobreza a apartir de modelos y especificaciones de muestra ya que se relizó los modelos Random forest y Boosting igde.
 
 3.3 Clasificación por ingreso:  Se encuentra la clasificación de pobreza a apartir de modelos y especificaciones de muestra partiendo del ingreso
